@@ -5,6 +5,8 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using StardewValley.Inventories;
+using StardewValley.Locations;
 using StardewValley.Menus;
 using StardewValley.Objects;
 using StardewValley.Tools;
@@ -24,6 +26,7 @@ namespace AndroidWorkbenchHelper
 
         private void OnMenuChanged(object sender, MenuChangedEventArgs e)
         {
+            // Hubungkan semua peti saat Workbench dibuka
             if (e.NewMenu is CraftingPage craftingPage && !craftingPage.cooking)
             {
                 var containerField = Helper.Reflection.GetField<List<IInventory>>(craftingPage, "_materialContainers");
@@ -50,6 +53,7 @@ namespace AndroidWorkbenchHelper
 
         private void OnRenderedActiveMenu(object sender, RenderedActiveMenuEventArgs e)
         {
+            // Tampilkan Tombol Panah Merah di samping menu Workbench
             if (Game1.activeClickableMenu is CraftingPage craftingPage && !craftingPage.cooking)
             {
                 var containerField = Helper.Reflection.GetField<List<IInventory>>(craftingPage, "_materialContainers");
@@ -168,6 +172,7 @@ namespace AndroidWorkbenchHelper
             List<Chest> chests = new List<Chest>();
             if (loc == null) return chests;
 
+            // 1. ZONA LADANG UTAMA
             if (IsMainFarmDomain(loc))
             {
                 AddChestsFromLocation(Game1.getFarm(), chests);
@@ -176,15 +181,17 @@ namespace AndroidWorkbenchHelper
                 AddChestsFromLocation(Game1.getLocationFromName("FarmCave"), chests);
                 AddChestsFromLocation(Game1.getLocationFromName("Cellar"), chests);
 
-                if (Game1.getFarm()?.buildings != null)
+                Farm farm = Game1.getFarm();
+                if (farm != null && farm.buildings != null)
                 {
-                    foreach (var b in Game1.getFarm().buildings)
+                    foreach (var b in farm.buildings)
                     {
                         if (b.indoors.Value != null)
                             AddChestsFromLocation(b.indoors.Value, chests);
                     }
                 }
             }
+            // 2. ZONA PULAU GINGER
             else if (IsGingerIslandDomain(loc))
             {
                 AddChestsFromLocation(Game1.getLocationFromName("IslandWest"), chests);
@@ -200,9 +207,10 @@ namespace AndroidWorkbenchHelper
             string name = loc.Name ?? "";
             if (name == "Farm" || name == "FarmHouse" || name == "Greenhouse" || name == "FarmCave" || name == "Cellar") return true;
 
-            if (Game1.getFarm()?.buildings != null)
+            Farm farm = Game1.getFarm();
+            if (farm != null && farm.buildings != null)
             {
-                foreach (var b in Game1.getFarm().buildings)
+                foreach (var b in farm.buildings)
                 {
                     if (b.indoors.Value != null && (b.indoors.Value == loc || b.indoors.Value.Name == name))
                         return true;
