@@ -1,0 +1,28 @@
+name: Build Mod
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Add build environment
+      uses: Pathoschild/SMAPI-ModBuildWorkflow/add-build-environment@v1
+
+    - name: Build mod
+      run: dotnet build -c Release
+
+    - name: Package Mod Zip
+      run: |
+        mkdir -p ./Package/AndroidWorkbenchHelper
+        cp bin/Release/net6.0/AndroidWorkbenchHelper.dll ./Package/AndroidWorkbenchHelper/
+        cp manifest.json ./Package/AndroidWorkbenchHelper/
+        cd Package && zip -r ../AndroidWorkbenchHelper.zip AndroidWorkbenchHelper
+
+    - name: Upload Mod Zip
+      uses: actions/upload-artifact@v4
+      with:
+        name: AndroidWorkbenchHelper-Mod
+        path: AndroidWorkbenchHelper.zip
