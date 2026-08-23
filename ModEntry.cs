@@ -13,7 +13,6 @@ using StardewValley.Tools;
 
 namespace AndroidWorkbenchHelper
 {
-    // 1. KELAS KONFIGURASI MOD
     public class ModConfig
     {
         public int OutdoorRadius { get; set; } = 35;
@@ -23,7 +22,6 @@ namespace AndroidWorkbenchHelper
         public bool EnableQuickStackButton { get; set; } = true;
     }
 
-    // 2. INTERFACE GENERIC MOD CONFIG MENU (GMCM)
     public interface IGenericModConfigMenuApi
     {
         void Register(IManifest mod, Action reset, Action save, bool titleScreenOnly = false);
@@ -47,7 +45,6 @@ namespace AndroidWorkbenchHelper
             helper.Events.Input.ButtonPressed += OnButtonPressed;
         }
 
-        // INTEGRASI KE GENERIC MOD CONFIG MENU
         private void OnGameLaunched(object sender, GameLaunchedEventArgs e)
         {
             var configMenu = Helper.ModRegistry.GetApi<IGenericModConfigMenuApi>("spacechase0.GenericModConfigMenu");
@@ -143,13 +140,13 @@ namespace AndroidWorkbenchHelper
                 var containerField = Helper.Reflection.GetField<List<IInventory>>(craftingPage, "_materialContainers");
                 if (containerField.GetValue() != null)
                 {
-                    int btnSize = 52;
-                    // Posisi pas di samping kanan jendela menu crafting HP
-                    int btnX = craftingPage.xPositionOnScreen + craftingPage.width - 64;
+                    int btnSize = 74; // Ukuran diperbesar ke 74 piksel
+                    int btnX = craftingPage.xPositionOnScreen + craftingPage.width - 84;
                     int btnY = craftingPage.yPositionOnScreen + 64;
 
                     quickStackBtnBox = new Rectangle(btnX, btnY, btnSize, btnSize);
 
+                    // Kotak tombol kayu resmi
                     IClickableMenu.drawTextureBox(
                         e.SpriteBatch,
                         Game1.menuTexture,
@@ -163,14 +160,22 @@ namespace AndroidWorkbenchHelper
                         false
                     );
 
+                    // Ikon Panah Merah diperbesar (Skala 3.6x) dan tetap di tengah
+                    float iconScale = 3.6f;
+                    float iconPixelSize = 16f * iconScale; // ~57.6px
+                    Vector2 iconPos = new Vector2(
+                        btnX + (btnSize - iconPixelSize) / 2,
+                        btnY + (btnSize - iconPixelSize) / 2
+                    );
+
                     e.SpriteBatch.Draw(
                         Game1.mouseCursors,
-                        new Vector2(btnX + 6, btnY + 6),
+                        iconPos,
                         new Rectangle(103, 469, 16, 16),
                         Color.White,
                         0f,
                         Vector2.Zero,
-                        2.5f,
+                        iconScale,
                         SpriteEffects.None,
                         0.9f
                     );
@@ -252,7 +257,6 @@ namespace AndroidWorkbenchHelper
             }
         }
 
-        // PENGAMBILAN PETI CEPAT (ANTI-LAG 60 FPS)
         private List<Chest> GetChestsOptimized(GameLocation loc)
         {
             List<Chest> chests = new List<Chest>();
@@ -260,7 +264,7 @@ namespace AndroidWorkbenchHelper
 
             Vector2 playerPos = Game1.player.Tile;
 
-            // 1. JIKA DI DALAM RUANGAN (Rumah, Shed, Kandang, Greenhouse)
+            // 1. Ruangan Dalam (Shed, Rumah, Kandang, Greenhouse)
             if (loc is FarmHouse || loc.Name == "Greenhouse" || loc.Name == "FarmCave" || loc.Name == "Cellar" || loc.Name.StartsWith("IslandFarmHouse") || IsBuildingInterior(loc))
             {
                 if (Config.ScanEntireRoom)
@@ -272,7 +276,7 @@ namespace AndroidWorkbenchHelper
                     AddChestsFromLocation(loc, chests, playerPos, Config.OutdoorRadius);
                 }
             }
-            // 2. JIKA DI LUAR LADANG UTAMA
+            // 2. Luar Ladang
             else if (loc is Farm || loc.Name == "Farm")
             {
                 AddChestsFromLocation(loc, chests, playerPos, Config.OutdoorRadius);
@@ -293,7 +297,7 @@ namespace AndroidWorkbenchHelper
                     }
                 }
             }
-            // 3. JIKA DI PULAU GINGER
+            // 3. Pulau Ginger
             else if (loc.Name.StartsWith("IslandWest"))
             {
                 AddChestsFromLocation(loc, chests, playerPos, Config.OutdoorRadius);
@@ -324,7 +328,6 @@ namespace AndroidWorkbenchHelper
             {
                 if (kvp.Value is Chest chest && chest.Items != null)
                 {
-                    // Filter peti kosong untuk menghemat CPU HP (Anti-Lag)
                     if (Config.FilterEmptyChests && (chest.Items.Count == 0 || chest.isEmpty()))
                         continue;
 
