@@ -13,20 +13,103 @@ using StardewValley.Tools;
 
 namespace AndroidWorkbenchHelper
 {
+    // 1. KELAS KONFIGURASI MOD
+    public class ModConfig
+    {
+        public int OutdoorRadius { get; set; } = 35;
+        public bool ScanEntireRoom { get; set; } = true;
+        public bool ConnectFarmBuildingsFromOutside { get; set; } = false;
+        public bool FilterEmptyChests { get; set; } = true;
+        public bool EnableQuickStackButton { get; set; } = true;
+    }
+
+    // 2. INTERFACE GENERIC MOD CONFIG MENU (GMCM)
+    public interface IGenericModConfigMenuApi
+    {
+        void Register(IManifest mod, Action reset, Action save, bool titleScreenOnly = false);
+        void AddSectionTitle(IManifest mod, Func<string> text, Func<string> tooltip = null);
+        void AddBoolOption(IManifest mod, Func<bool> getValue, Action<bool> setValue, Func<string> name, Func<string> tooltip = null, string fieldId = null);
+        void AddNumberOption(IManifest mod, Func<int> getValue, Action<int> setValue, Func<string> name, Func<string> tooltip = null, int? min = null, int? max = null, int? interval = null, Func<int, string> formatValue = null, string fieldId = null);
+    }
+
     public class ModEntry : Mod
     {
+        public ModConfig Config;
         private Rectangle quickStackBtnBox;
 
         public override void Entry(IModHelper helper)
         {
+            this.Config = helper.ReadConfig<ModConfig>();
+
+            helper.Events.GameLoop.GameLaunched += OnGameLaunched;
             helper.Events.Display.MenuChanged += OnMenuChanged;
             helper.Events.Display.RenderedActiveMenu += OnRenderedActiveMenu;
             helper.Events.Input.ButtonPressed += OnButtonPressed;
         }
 
+        // INTEGRASI KE GENERIC MOD CONFIG MENU
+        private void OnGameLaunched(object sender, GameLaunchedEventArgs e)
+        {
+            var configMenu = Helper.ModRegistry.GetApi<IGenericModConfigMenuApi>("spacechase0.GenericModConfigMenu");
+            if (configMenu != null)
+            {
+                configMenu.Register(
+                    mod: this.ModManifest,
+                    reset: () => this.Config = new ModConfig(),
+                    save: () => this.Helper.WriteConfig(this.Config)
+                );
+
+                configMenu.AddSectionTitle(this.ModManifest, () => "Workbench Range Settings");
+
+                configMenu.AddNumberOption(
+                    mod: this.ModManifest,
+                    getValue: () => this.Config.OutdoorRadius,
+                    setValue: val => this.Config.OutdoorRadius = val,
+                    name: () => "Outdoor Radius (Tiles)",
+                    tooltip: () => "Radius jangkauan peti saat Workbench ditaruh di luar ladang (Default: 35).",
+                    min: 5,
+                    max: 100,
+                    interval: 5
+                );
+
+                configMenu.AddBoolOption(
+                    mod: this.ModManifest,
+                    getValue: () => this.Config.ScanEntireRoom,
+                    setValue: val => this.Config.ScanEntireRoom = val,
+                    name: () => "Scan Entire Room (Indoors)",
+                    tooltip: () => "Hubungkan semua peti di dalam ruangan yang sama (Rumah/Shed/Kandang)."
+                );
+
+                configMenu.AddBoolOption(
+                    mod: this.ModManifest,
+                    getValue: () => this.Config.ConnectFarmBuildingsFromOutside,
+                    setValue: val => this.Config.ConnectFarmBuildingsFromOutside = val,
+                    name: () => "Connect Sheds From Outside",
+                    tooltip: () => "Sambungkan peti di dalam Shed saat kamu crafting di luar ladang."
+                );
+
+                configMenu.AddSectionTitle(this.ModManifest, () => "Performance & Features");
+
+                configMenu.AddBoolOption(
+                    mod: this.ModManifest,
+                    getValue: () => this.Config.FilterEmptyChests,
+                    setValue: val => this.Config.FilterEmptyChests = val,
+                    name: () => "Filter Empty Chests (Anti-Lag)",
+                    tooltip: () => "Lewati peti kosong agar prosesor HP tidak terbebani (Sangat disarankan ON)."
+                );
+
+                configMenu.AddBoolOption(
+                    mod: this.ModManifest,
+                    getValue: () => this.Config.EnableQuickStackButton,
+                    setValue: val => this.Config.EnableQuickStackButton = val,
+                    name: () => "Enable Quick-Stack Button",
+                    tooltip: () => "Tampilkan tombol panah merah untuk auto-deposit barang ke peti."
+                );
+            }
+        }
+
         private void OnMenuChanged(object sender, MenuChangedEventArgs e)
         {
-            // Hubungkan semua peti saat Workbench dibuka
             if (e.NewMenu is CraftingPage craftingPage && !craftingPage.cooking)
             {
                 var containerField = Helper.Reflection.GetField<List<IInventory>>(craftingPage, "_materialContainers");
@@ -34,7 +117,7 @@ namespace AndroidWorkbenchHelper
 
                 if (existing != null)
                 {
-                    List<Chest> chests = GetChestsForCurrentDomain(Game1.currentLocation);
+                    List<Chest> chests = GetChestsOptimized(Game1.currentLocation);
                     if (chests.Count > 0)
                     {
                         List<IInventory> containers = new List<IInventory>();
@@ -45,7 +128,7 @@ namespace AndroidWorkbenchHelper
                         }
 
                         containerField.SetValue(containers);
-                        Monitor.Log($"Workbench connected to {containers.Count} chests!", LogLevel.Info);
+                        Monitor.Log($"Workbench tersambung ke {containers.Count} peti aktif!", LogLevel.Info);
                     }
                 }
             }
@@ -53,14 +136,16 @@ namespace AndroidWorkbenchHelper
 
         private void OnRenderedActiveMenu(object sender, RenderedActiveMenuEventArgs e)
         {
-            // Tampilkan Tombol Panah Merah di samping menu Workbench
+            if (!Config.EnableQuickStackButton) return;
+
             if (Game1.activeClickableMenu is CraftingPage craftingPage && !craftingPage.cooking)
             {
                 var containerField = Helper.Reflection.GetField<List<IInventory>>(craftingPage, "_materialContainers");
                 if (containerField.GetValue() != null)
                 {
-                    int btnSize = 56;
-                    int btnX = craftingPage.xPositionOnScreen + craftingPage.width + 10;
+                    int btnSize = 52;
+                    // Posisi pas di samping kanan jendela menu crafting HP
+                    int btnX = craftingPage.xPositionOnScreen + craftingPage.width - 64;
                     int btnY = craftingPage.yPositionOnScreen + 64;
 
                     quickStackBtnBox = new Rectangle(btnX, btnY, btnSize, btnSize);
@@ -80,7 +165,7 @@ namespace AndroidWorkbenchHelper
 
                     e.SpriteBatch.Draw(
                         Game1.mouseCursors,
-                        new Vector2(btnX + 8, btnY + 8),
+                        new Vector2(btnX + 6, btnY + 6),
                         new Rectangle(103, 469, 16, 16),
                         Color.White,
                         0f,
@@ -97,7 +182,7 @@ namespace AndroidWorkbenchHelper
         {
             if (!Context.IsWorldReady || e.Button != SButton.MouseLeft) return;
 
-            if (Game1.activeClickableMenu is CraftingPage craftingPage && !craftingPage.cooking)
+            if (Config.EnableQuickStackButton && Game1.activeClickableMenu is CraftingPage craftingPage && !craftingPage.cooking)
             {
                 Point mousePos = Game1.getMousePosition();
                 Vector2 scaled = Utility.ModifyCoordinatesForUIScale(new Vector2(mousePos.X, mousePos.Y));
@@ -107,14 +192,14 @@ namespace AndroidWorkbenchHelper
                 if (touchArea.Contains(mousePos) || touchArea.Contains(uiPos))
                 {
                     Helper.Input.Suppress(e.Button);
-                    QuickStackToDomainChests();
+                    QuickStackOptimized();
                 }
             }
         }
 
-        private void QuickStackToDomainChests()
+        private void QuickStackOptimized()
         {
-            List<Chest> chests = GetChestsForCurrentDomain(Game1.currentLocation);
+            List<Chest> chests = GetChestsOptimized(Game1.currentLocation);
             if (chests.Count == 0) return;
 
             int movedCount = 0;
@@ -167,71 +252,90 @@ namespace AndroidWorkbenchHelper
             }
         }
 
-        private List<Chest> GetChestsForCurrentDomain(GameLocation loc)
+        // PENGAMBILAN PETI CEPAT (ANTI-LAG 60 FPS)
+        private List<Chest> GetChestsOptimized(GameLocation loc)
         {
             List<Chest> chests = new List<Chest>();
             if (loc == null) return chests;
 
-            // 1. ZONA LADANG UTAMA
-            if (IsMainFarmDomain(loc))
-            {
-                AddChestsFromLocation(Game1.getFarm(), chests);
-                AddChestsFromLocation(Game1.getLocationFromName("FarmHouse"), chests);
-                AddChestsFromLocation(Game1.getLocationFromName("Greenhouse"), chests);
-                AddChestsFromLocation(Game1.getLocationFromName("FarmCave"), chests);
-                AddChestsFromLocation(Game1.getLocationFromName("Cellar"), chests);
+            Vector2 playerPos = Game1.player.Tile;
 
-                Farm farm = Game1.getFarm();
-                if (farm != null && farm.buildings != null)
+            // 1. JIKA DI DALAM RUANGAN (Rumah, Shed, Kandang, Greenhouse)
+            if (loc is FarmHouse || loc.Name == "Greenhouse" || loc.Name == "FarmCave" || loc.Name == "Cellar" || loc.Name.StartsWith("IslandFarmHouse") || IsBuildingInterior(loc))
+            {
+                if (Config.ScanEntireRoom)
                 {
-                    foreach (var b in farm.buildings)
+                    AddChestsFromLocation(loc, chests, null, -1);
+                }
+                else
+                {
+                    AddChestsFromLocation(loc, chests, playerPos, Config.OutdoorRadius);
+                }
+            }
+            // 2. JIKA DI LUAR LADANG UTAMA
+            else if (loc is Farm || loc.Name == "Farm")
+            {
+                AddChestsFromLocation(loc, chests, playerPos, Config.OutdoorRadius);
+
+                if (Config.ConnectFarmBuildingsFromOutside)
+                {
+                    AddChestsFromLocation(Game1.getLocationFromName("FarmHouse"), chests, null, -1);
+                    AddChestsFromLocation(Game1.getLocationFromName("Greenhouse"), chests, null, -1);
+
+                    Farm farm = Game1.getFarm();
+                    if (farm != null && farm.buildings != null)
                     {
-                        if (b.indoors.Value != null)
-                            AddChestsFromLocation(b.indoors.Value, chests);
+                        foreach (var b in farm.buildings)
+                        {
+                            if (b.indoors.Value != null)
+                                AddChestsFromLocation(b.indoors.Value, chests, null, -1);
+                        }
                     }
                 }
             }
-            // 2. ZONA PULAU GINGER
-            else if (IsGingerIslandDomain(loc))
+            // 3. JIKA DI PULAU GINGER
+            else if (loc.Name.StartsWith("IslandWest"))
             {
-                AddChestsFromLocation(Game1.getLocationFromName("IslandWest"), chests);
-                AddChestsFromLocation(Game1.getLocationFromName("IslandFarmHouse"), chests);
+                AddChestsFromLocation(loc, chests, playerPos, Config.OutdoorRadius);
             }
 
             return chests;
         }
 
-        private bool IsMainFarmDomain(GameLocation loc)
+        private bool IsBuildingInterior(GameLocation loc)
         {
-            if (loc is Farm || loc is FarmHouse) return true;
-            string name = loc.Name ?? "";
-            if (name == "Farm" || name == "FarmHouse" || name == "Greenhouse" || name == "FarmCave" || name == "Cellar") return true;
-
             Farm farm = Game1.getFarm();
             if (farm != null && farm.buildings != null)
             {
                 foreach (var b in farm.buildings)
                 {
-                    if (b.indoors.Value != null && (b.indoors.Value == loc || b.indoors.Value.Name == name))
+                    if (b.indoors.Value != null && (b.indoors.Value == loc || b.indoors.Value.Name == loc.Name))
                         return true;
                 }
             }
             return false;
         }
 
-        private bool IsGingerIslandDomain(GameLocation loc)
-        {
-            string name = loc.Name ?? "";
-            return name.StartsWith("IslandWest") || name.StartsWith("IslandFarmHouse");
-        }
-
-        private void AddChestsFromLocation(GameLocation location, List<Chest> list)
+        private void AddChestsFromLocation(GameLocation location, List<Chest> list, Vector2? centerTile, int radius)
         {
             if (location == null || location.Objects == null) return;
-            foreach (var obj in location.Objects.Values)
+
+            foreach (var kvp in location.Objects.Pairs)
             {
-                if (obj is Chest chest && chest.Items != null)
+                if (kvp.Value is Chest chest && chest.Items != null)
+                {
+                    // Filter peti kosong untuk menghemat CPU HP (Anti-Lag)
+                    if (Config.FilterEmptyChests && (chest.Items.Count == 0 || chest.isEmpty()))
+                        continue;
+
+                    if (centerTile.HasValue && radius > 0)
+                    {
+                        if (Vector2.Distance(centerTile.Value, kvp.Key) > radius)
+                            continue;
+                    }
+
                     list.Add(chest);
+                }
             }
         }
     }
