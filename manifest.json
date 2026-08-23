@@ -1,0 +1,9 @@
+{
+  "Name": "Android Workbench Helper",
+  "Author": "wanda2009",
+  "Version": "1.0.0",
+  "Description": "Allows Workbenches to craft from all domain chests and auto-deposit items with a quick-stack button.",
+  "UniqueID": "wanda2009.AndroidWorkbenchHelper",
+  "EntryDll": "AndroidWorkbenchHelper.dll",
+  "MinimumApiVersion": "4.0.0"
+}
